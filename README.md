@@ -87,7 +87,7 @@ transformer_team/
 | `transformer_block.py` | 甲 | Block 组装。H1=LN(X+Attn(X))、H2=LN(H1+FFN(H1))，所有权重与 γ/β 用字典 P 传递 |
 | `self_attention_fused.py` | 丙 | QKV 融合版自注意力。先把 Wq/Wk/Wv 沿最后一维拼成 Wqkv，一次矩阵乘后再 split，用于题目第 4 节的融合验证 |
 | `bench_qkv.py` | 丙 | 融合计时实验。X∈R^128×64、三个 64×64 权重，Wqkv 只拼一次，预热 20 次后各重复 300 次，输出最小值与中位数 |
-| `quanti_func.py` | 甲 | 方向B 量化管线。`sym_quanti_int8` 求 s 并量化为 int8，`dequanti_int8` 反量化回浮点，`inaccuracy` 统计绝对/相对误差 |
+| `quanti_func.py` | 乙 | 方向B 量化管线。`sym_quanti_int8` 求 s 并量化为 int8，`dequanti_int8` 反量化回浮点，`inaccuracy` 统计绝对/相对误差 |
 | `transformer_block_int.py` | 甲 | 量化版 Block。把参数中的 (W_int8, s) 元组反量化后替换原权重，重跑整个 Block，γ/β 等非量化参数直接沿用 |
 | `test_int.py` | 甲 | 方向B 对比脚本。同一输入下先跑浮点版得 H2，再跑量化版得 H2q，并排打印，用于观察量化对最终输出的影响 |
 | `test_mine.py` | 丙 | 手算小例子。用 2×2 单位权重矩阵核对注意力矩阵 P 与输出，并对比换掉 Wv 前后 P 是否变化 |
