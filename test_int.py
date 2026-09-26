@@ -22,9 +22,9 @@ H = transformer_block(X, P)
 
 Pq = {}
 for k in ["Wq", "Wk", "Wv", "Wo", "W1", "W2"]:
-    Pq[k] = sym_quanti_int8(P[k])  # 大矩阵 → (int8, s)
+    Pq[k] = sym_quanti_int8(P[k])  
 for k in ["g1", "b1", "g2", "b2", "b1f", "b2f"]:
-    Pq[k] = P[k]  # 小向量 → 原样浮点
+    Pq[k] = P[k] 
 
 H2q = quantized_transformer_block(X, Pq)
 

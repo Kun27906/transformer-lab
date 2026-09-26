@@ -1,5 +1,6 @@
 import numpy as np
-from ops_bing import softmax
+from softmax_layernorm import softmax
+
 def self_attention_fused(x, Wq, Wk, Wv, Wo):
    
     Wqkv =np.concatenate([Wq,Wk,Wv],axis=-1)

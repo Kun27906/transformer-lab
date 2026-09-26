@@ -1,5 +1,5 @@
 import numpy as np
-from ops_bing import self_attention
+from self_attention import self_attention
 
 I2 = np.eye(2)
 X  = np.array([[1., 1.],
