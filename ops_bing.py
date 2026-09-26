@@ -11,15 +11,21 @@ def softmax(x):
 
 
 def self_attention(x, Wq, Wk, Wv, Wo):
-    Q =x@Wq     # 空1
-    K =x@Wk     # 空2
-    V =x@Wv      # 空3
+    Q =x@Wq     
+    K =x@Wk     
+    V =x@Wv     
 
     dk = Q.shape[-1]
-    S = Q@K.T/np.sqrt(dk)       # 空4
+    S = Q@K.T/np.sqrt(dk)      
 
-    P = softmax(S)       # 空5
-
-    out = (P@V)@Wo     # 空6
-
+    P = softmax(S)      
+    out = (P@V)@Wo     
     return out, P
+def feed_forward(x, W1, b1, W2, b2):
+    h = x@W1+b1
+
+    h =np.maximum(h,0)
+
+    out =h@W2+b2 
+
+    return out
