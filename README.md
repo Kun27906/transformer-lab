@@ -63,6 +63,7 @@
 ```
 transformer_team/
 ├── README.md                              # 本文件：分工方案 + 目录说明 + 调用流程
+├── CORRECTIONS.md                         # 重大修正记录（现象 / 原因 / 方法 / 代价 / 数据）
 ├── 01_common/                             # 通用：与版本无关的基础件
 │   ├── params.py                          # 输入与权重的统一生成入口
 │   ├── softmax_layernorm.py               # 基础算子 softmax / layernorm
@@ -112,7 +113,10 @@ transformer_team/
 | `04_fused_version/transformer_block_fused.py` | 甲 | QKV 融合版 Block。只把自注意力换成融合实现，其余与无优化版完全一致，便于单独观察融合本身的效果 |
 | `04_fused_version/bench_qkv.py` | 丙 | QKV 融合单独计时。X∈R^128×64、三个 64×64 权重，Wqkv 只拼一次，预热 20 次后各重复 300 次，输出最小值与中位数 |
 | `05_total_version/transformer_block_int_fused.py` | 甲 | 总融合版 Block（每次调用都反量化并拼 Wqkv），并提供 `build_prepared` / `quantized_block_prepared` 表示“反量化与拼接只做一次”的部署态 |
-| `05_total_version/test_compare_all.py` | 甲 | ★最终总测试。题目第 3 节 5 项自动检查，加五种实现的绝对/相对误差、输出、存储账与计时；大模型部分只测开销与加速比 |
+| `05_total_version/test_compare_all.py` | 甲 | ★最终总测试。题目第 3 节 5 项自动检查，加五种实现的绝对/相对误差、输出、存储账与计时；大模型部分只测开销与加速比。计时采用 BLAS 单线程 + 交替采样 + 预热轮 + 报最小值，方法学与实测数据见 `CORRECTIONS.md` 修正 001 |
+| `CORRECTIONS.md` | 全组 | 重大修正记录。逐条记录影响结论的修正：现象、原因、修正方法、代价、修正前后实测数据 |
+
+> 计时结果只用于比较各实现的相对开销，其稳定性度量与可信边界见 `CORRECTIONS.md` 修正 001。
 
 运行方式（五个目录的路径由脚本自己加入 sys.path，所以在项目根目录、各版本目录内、甚至项目外都能直接运行）：
 
