@@ -2,11 +2,10 @@ import os
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-for _d in ("01_common", "02_float_version", "03_quant_version", "04_fused_version", "05_total_version"):
-    sys.path.append(os.path.join(ROOT, _d))
+sys.path.insert(0, ROOT)
 
 import numpy as np
-from self_attention import self_attention
+from float_version.self_attention import self_attention
 
 I2 = np.eye(2)
 X  = np.array([[1., 1.],

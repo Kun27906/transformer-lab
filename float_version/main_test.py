@@ -2,14 +2,13 @@ import os
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-for _d in ("01_common", "02_float_version", "03_quant_version", "04_fused_version", "05_total_version"):
-    sys.path.append(os.path.join(ROOT, _d))
+sys.path.insert(0, ROOT)
 
 import numpy as np
 
-from params import make_params
-from self_attention import self_attention
-from transformer_block import transformer_block
+from common.params import make_params
+from float_version.self_attention import self_attention
+from float_version.transformer_block import transformer_block
 
 X, P = make_params(np.random.default_rng(0), d_model=4, d_ff=8, T=3)
 

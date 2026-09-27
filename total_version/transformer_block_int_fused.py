@@ -1,9 +1,9 @@
 import numpy as np
 
-from feed_forward import feed_forward
-from quanti_func import build_pq, dequant_params
-from self_attention_fused import self_attention_from_wqkv
-from softmax_layernorm import layernorm
+from common.feed_forward import feed_forward
+from common.quanti_func import build_pq, dequant_params
+from fused_version.self_attention_fused import self_attention_from_wqkv
+from common.softmax_layernorm import layernorm
 
 
 def quantized_transformer_block_fused(X, Pq):

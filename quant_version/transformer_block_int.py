@@ -1,7 +1,7 @@
-from feed_forward import feed_forward
-from quanti_func import dequant_params
-from self_attention import self_attention
-from softmax_layernorm import layernorm
+from common.feed_forward import feed_forward
+from common.quanti_func import dequant_params
+from float_version.self_attention import self_attention
+from common.softmax_layernorm import layernorm
 
 
 def quantized_transformer_block(X, Pq):

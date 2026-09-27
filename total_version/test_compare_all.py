@@ -2,8 +2,7 @@ import os
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-for _d in ("01_common", "02_float_version", "03_quant_version", "04_fused_version", "05_total_version"):
-    sys.path.append(os.path.join(ROOT, _d))
+sys.path.insert(0, ROOT)
 
 os.environ["OPENBLAS_NUM_THREADS"] = "1"
 os.environ["OMP_NUM_THREADS"] = "1"
@@ -14,15 +13,15 @@ import statistics
 import time
 import numpy as np
 
-from feed_forward import feed_forward
-from params import make_params
-from quanti_func import build_pq, inaccuracy, storage_bytes
-from self_attention import self_attention
-from softmax_layernorm import layernorm
-from transformer_block import transformer_block
-from transformer_block_fused import transformer_block_fused
-from transformer_block_int import quantized_transformer_block
-from transformer_block_int_fused import (build_prepared,
+from common.feed_forward import feed_forward
+from common.params import make_params
+from common.quanti_func import build_pq, inaccuracy, storage_bytes
+from float_version.self_attention import self_attention
+from common.softmax_layernorm import layernorm
+from float_version.transformer_block import transformer_block
+from fused_version.transformer_block_fused import transformer_block_fused
+from quant_version.transformer_block_int import quantized_transformer_block
+from total_version.transformer_block_int_fused import (build_prepared,
                                          quantized_block_prepared,
                                          quantized_transformer_block_fused)
 

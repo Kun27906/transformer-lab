@@ -1,6 +1,6 @@
-from softmax_layernorm import layernorm
-from self_attention import self_attention
-from feed_forward import feed_forward
+from common.softmax_layernorm import layernorm
+from float_version.self_attention import self_attention
+from common.feed_forward import feed_forward
 
 def transformer_block(X,P):
     O,_=self_attention(X,P['Wq'],P['Wk'],P['Wv'],P['Wo'])

@@ -1,5 +1,5 @@
 import numpy as np
-from softmax_layernorm import softmax
+from common.softmax_layernorm import softmax
 
 def self_attention(x, Wq, Wk, Wv, Wo):
     Q =x@Wq

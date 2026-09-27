@@ -7,7 +7,7 @@
 ## 修正 001：大模型计时抖动
 
 **日期**：2026-09-28
-**涉及文件**：`05_total_version/test_compare_all.py`
+**涉及文件**：`total_version/test_compare_all.py`
 **状态**：已修正并入库
 
 ### 一、现象

@@ -58,33 +58,57 @@
 
 ## 五、代码目录与文件说明
 
-代码按“通用 → 浮点版 → 单量化版 → 融合版 → 总融合版”五个版本分目录存放，同一版本的程序与它的测试放在一起：
+代码按“通用 → 浮点版 → 单量化版 → 融合版 → 总融合版”五个版本分目录存放，每个目录都是一个标准 Python 包（各含一个 `__init__.py`），同一版本的程序与它的测试放在一起：
 
 ```
 transformer_team/
 ├── README.md                              # 本文件：分工方案 + 目录说明 + 调用流程
 ├── CORRECTIONS.md                         # 重大修正记录（现象 / 原因 / 方法 / 代价 / 数据）
-├── 01_common/                             # 通用：与版本无关的基础件
+├── common/                                # ① 通用：与版本无关的基础件
+│   ├── __init__.py
 │   ├── params.py                          # 输入与权重的统一生成入口
 │   ├── softmax_layernorm.py               # 基础算子 softmax / layernorm
 │   ├── feed_forward.py                    # 前馈网络 FFN
 │   └── quanti_func.py                     # 量化 / 反量化 / 误差 / 存储统计
-├── 02_float_version/                      # 浮点版（无优化）
+├── float_version/                         # ② 浮点版（无优化）
+│   ├── __init__.py
 │   ├── self_attention.py                  # 单头自注意力（QKV 分开算）
 │   ├── transformer_block.py               # 无优化版 Block
 │   ├── main_test.py                       # 最小前向 demo
 │   └── test_mine.py                       # 注意力手算小例子
-├── 03_quant_version/                      # 单量化版
+├── quant_version/                         # ③ 单量化版
+│   ├── __init__.py
 │   ├── transformer_block_int.py           # 单量化版 Block
 │   └── test_int.py                        # 浮点版 vs 量化版对照
-├── 04_fused_version/                      # QKV 融合版
+├── fused_version/                         # ④ QKV 融合版
+│   ├── __init__.py
 │   ├── self_attention_fused.py            # 融合版自注意力（含共用注意力函数）
 │   ├── transformer_block_fused.py         # QKV 融合版 Block
 │   └── bench_qkv.py                       # QKV 融合单独计时
-└── 05_total_version/                      # 总融合版（量化 + 融合）
+└── total_version/                         # ⑤ 总融合版（量化 + 融合）
+    ├── __init__.py
     ├── transformer_block_int_fused.py     # 总融合版 Block + 部署态参数
     └── test_compare_all.py                # ★最终总测试
 ```
+
+**导入约定（重要）**：模块之间一律使用点号绝对导入，例如
+
+```python
+from common.quanti_func import build_pq          # 通用包
+from float_version.self_attention import self_attention
+from total_version.transformer_block_int_fused import build_prepared
+```
+
+每个入口脚本（`main_test.py` / `test_mine.py` / `test_int.py` / `test_compare_all.py`）开头都有三行引导，把项目根目录加入模块搜索路径：
+
+```python
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, ROOT)
+```
+
+这样既能让 IDE 静态解析出每个 import（不再报“未解析的引用”），也能保证运行时直接跑通。
+
+**IDE 设置**：把 `transformer_team` 这个目录本身作为项目根目录打开（PyCharm / VS Code / Visual Studio 都一样），`common`、`float_version` 等包才会被识别为可导入的包。若之前打开的是别的位置，重新打开一次项目即可。
 
 四个 Block 之间只差一个环节，结构上可以对着看：
 
@@ -99,97 +123,103 @@ transformer_team/
 
 | 文件 | 负责人 | 作用 |
 | --- | --- | --- |
-| `01_common/params.py` | 甲 | 全组统一参数入口。`make_params` 固定生成顺序 X → Wq → Wk → Wv → Wo → W1 → W2，保证三人跑出同一组数字 |
-| `01_common/softmax_layernorm.py` | 乙 | 两个基础算子。`softmax` 先减每行最大值防溢出、沿 axis=-1 归一化；`layernorm` 沿最后一维计算，eps=1e-5，γ/β 可选（默认 None 等价于 γ=1、β=0） |
-| `01_common/feed_forward.py` | 丙 | 前馈网络。ReLU(xW1+b1)W2+b2，逐位置独立，中间维度 d_model → d_ff → d_model |
-| `01_common/quanti_func.py` | 乙 | 量化域公共函数，全项目只此一处：`sym_quanti_int8`（求 s 并量化为 int8）、`dequanti_int8`（反量化）、`build_pq`（生成量化参数字典）、`dequant_params`（还原成浮点参数字典）、`inaccuracy`（最大绝对误差 + 相对误差）、`storage_bytes`（存储账，含刻度开销） |
-| `02_float_version/self_attention.py` | 丙 | 单头自注意力。Q=XWq、K=XWk、V=XWv → S=QK^T/√dk → A=softmax(S) → (A·V)·Wo，返回 (输出, 注意力矩阵 A) 以便外部检查；量化版与融合版都复用它 |
-| `02_float_version/transformer_block.py` | 甲 | 无优化版 Block。H1=LN(X+Attn(X))、H2=LN(H1+FFN(H1))，子层全部调用现成函数 |
-| `02_float_version/main_test.py` | 甲 | 浮点版最小 demo。打印输入维度、注意力矩阵、行和与最终输出 H2 |
-| `02_float_version/test_mine.py` | 丙 | 手算小例子。用 2×2 单位权重矩阵核对注意力矩阵与输出，并验证换掉 Wv 不改变 A |
-| `03_quant_version/transformer_block_int.py` | 甲 | 单量化版 Block。先 `dequant_params` 反量化权重，之后调用与无优化版完全相同的子层，便于逐元素比较误差 |
-| `03_quant_version/test_int.py` | 甲 | 单量化版对照。浮点版与量化版 Block 输出并排，并给出最大绝对误差与相对误差 |
-| `04_fused_version/self_attention_fused.py` | 丙 | 融合版自注意力。`self_attention_fused` 每次调用拼一次 Wqkv；`self_attention_from_wqkv` 供两个融合 Block 共用，注意力逻辑只此一处 |
-| `04_fused_version/transformer_block_fused.py` | 甲 | QKV 融合版 Block。只把自注意力换成融合实现，其余与无优化版完全一致，便于单独观察融合本身的效果 |
-| `04_fused_version/bench_qkv.py` | 丙 | QKV 融合单独计时。X∈R^128×64、三个 64×64 权重，Wqkv 只拼一次，预热 20 次后各重复 300 次，输出最小值与中位数 |
-| `05_total_version/transformer_block_int_fused.py` | 甲 | 总融合版 Block（每次调用都反量化并拼 Wqkv），并提供 `build_prepared` / `quantized_block_prepared` 表示“反量化与拼接只做一次”的部署态 |
-| `05_total_version/test_compare_all.py` | 甲 | ★最终总测试。题目第 3 节 5 项自动检查，加五种实现的绝对/相对误差、输出、存储账与计时；大模型部分只测开销与加速比。计时采用 BLAS 单线程 + 交替采样 + 预热轮 + 报最小值，方法学与实测数据见 `CORRECTIONS.md` 修正 001 |
+| `common/params.py` | 甲 | 全组统一参数入口。`make_params` 固定生成顺序 X → Wq → Wk → Wv → Wo → W1 → W2，保证三人跑出同一组数字 |
+| `common/softmax_layernorm.py` | 乙 | 两个基础算子。`softmax` 先减每行最大值防溢出、沿 axis=-1 归一化；`layernorm` 沿最后一维计算，eps=1e-5，γ/β 可选（默认 None 等价于 γ=1、β=0） |
+| `common/feed_forward.py` | 丙 | 前馈网络。ReLU(xW1+b1)W2+b2，逐位置独立，中间维度 d_model → d_ff → d_model |
+| `common/quanti_func.py` | 乙 | 量化域公共函数，全项目只此一处：`sym_quanti_int8`（求 s 并量化为 int8）、`dequanti_int8`（反量化）、`build_pq`（生成量化参数字典）、`dequant_params`（还原成浮点参数字典）、`inaccuracy`（最大绝对误差 + 相对误差）、`storage_bytes`（存储账，含刻度开销） |
+| `float_version/self_attention.py` | 丙 | 单头自注意力。Q=XWq、K=XWk、V=XWv → S=QK^T/√dk → A=softmax(S) → (A·V)·Wo，返回 (输出, 注意力矩阵 A) 以便外部检查；量化版与融合版都复用它 |
+| `float_version/transformer_block.py` | 甲 | 无优化版 Block。H1=LN(X+Attn(X))、H2=LN(H1+FFN(H1))，子层全部调用现成函数 |
+| `float_version/main_test.py` | 甲 | 浮点版最小 demo。打印输入维度、注意力矩阵、行和与最终输出 H2 |
+| `float_version/test_mine.py` | 丙 | 手算小例子。用 2×2 单位权重矩阵核对注意力矩阵与输出，并验证换掉 Wv 不改变 A |
+| `quant_version/transformer_block_int.py` | 甲 | 单量化版 Block。先 `dequant_params` 反量化权重，之后调用与无优化版完全相同的子层，便于逐元素比较误差 |
+| `quant_version/test_int.py` | 甲 | 单量化版对照。浮点版与量化版 Block 输出并排，并给出最大绝对误差与相对误差 |
+| `fused_version/self_attention_fused.py` | 丙 | 融合版自注意力。`self_attention_fused` 每次调用拼一次 Wqkv；`self_attention_from_wqkv` 供两个融合 Block 共用，注意力逻辑只此一处 |
+| `fused_version/transformer_block_fused.py` | 甲 | QKV 融合版 Block。只把自注意力换成融合实现，其余与无优化版完全一致，便于单独观察融合本身的效果 |
+| `fused_version/bench_qkv.py` | 丙 | QKV 融合单独计时。X∈R^128×64、三个 64×64 权重，Wqkv 只拼一次，预热 20 次后各重复 300 次，输出最小值与中位数 |
+| `total_version/transformer_block_int_fused.py` | 甲 | 总融合版 Block（每次调用都反量化并拼 Wqkv），并提供 `build_prepared` / `quantized_block_prepared` 表示“反量化与拼接只做一次”的部署态 |
+| `total_version/test_compare_all.py` | 甲 | ★最终总测试。题目第 3 节 5 项自动检查，加五种实现的绝对/相对误差、输出、存储账与计时；大模型部分只测开销与加速比。计时采用 BLAS 单线程 + 交替采样 + 预热轮 + 报最小值，方法学与实测数据见 `CORRECTIONS.md` 修正 001 |
 | `CORRECTIONS.md` | 全组 | 重大修正记录。逐条记录影响结论的修正：现象、原因、修正方法、代价、修正前后实测数据 |
 
 > 计时结果只用于比较各实现的相对开销，其稳定性度量与可信边界见 `CORRECTIONS.md` 修正 001。
 
-运行方式（五个目录的路径由脚本自己加入 sys.path，所以在项目根目录、各版本目录内、甚至项目外都能直接运行）：
+运行方式（项目根目录、各版本目录内、项目外均可直接运行）：
 
 ```bash
-python 05_total_version/test_compare_all.py   # ★最终总测试（结论数据出自这里）
-python 02_float_version/main_test.py          # 浮点版最小前向
-python 02_float_version/test_mine.py          # 注意力手算例子
-python 03_quant_version/test_int.py           # 浮点版 vs 单量化版
-python 04_fused_version/bench_qkv.py          # QKV 融合单独计时
+python total_version/test_compare_all.py   # ★最终总测试（结论数据出自这里）
+python float_version/main_test.py          # 浮点版最小前向
+python float_version/test_mine.py          # 注意力手算例子
+python quant_version/test_int.py           # 浮点版 vs 单量化版
+python fused_version/bench_qkv.py          # QKV 融合单独计时
+```
+
+也可以用模块方式运行（在项目根目录执行，IDE 的“运行”按钮通常就是这种方式）：
+
+```bash
+python -m total_version.test_compare_all
 ```
 
 ## 六、调用流程与关系图谱
 
-### 6.1 五个目录的依赖方向
+### 6.1 五个包的依赖方向
 
 箭头表示“被引用”：`A → B` 读作“A 里的模块被 B 引用”。
 
 ```
-01_common          →  02_float_version        （params / 算子被浮点版使用）
-01_common          →  03_quant_version        （quanti_func 被量化版使用）
-01_common          →  04_fused_version        （softmax / layernorm / feed_forward 被融合版使用）
-01_common          →  05_total_version        （quanti_func 被总融合版使用）
-02_float_version   →  03_quant_version        （03 复用 02 的 self_attention）
-04_fused_version   →  05_total_version        （05 复用 04 的 self_attention_from_wqkv）
-02 / 03 / 04       →  05_total_version        （最终测试要同时调用前四个版本做对比）
-                    →  各目录内的测试脚本
+common          →  float_version        （params / 算子被浮点版使用）
+common          →  quant_version        （quanti_func 被量化版使用）
+common          →  fused_version        （softmax / layernorm / feed_forward 被融合版使用）
+common          →  total_version        （quanti_func 被总融合版使用）
+float_version   →  quant_version        （quant_version 复用 float_version 的 self_attention）
+fused_version   →  total_version        （total_version 复用 fused_version 的 self_attention_from_wqkv）
+float_version / quant_version / fused_version  →  total_version   （最终测试要同时调用前四个版本做对比）
+                →  各包内的测试脚本
 ```
 
-一句话概括：**01 是被所有人依赖的地基；02 是原始实现；03 在 02 上加量化；04 在 02 的基础件上加融合；05 把 03 和 04 合起来，并且只有它同时依赖前四个版本。**
+一句话概括：**common 是被所有人依赖的地基；float_version 是原始实现；quant_version 在它上面加量化；fused_version 在通用算子上加融合；total_version 把量化和融合合起来，并且只有它同时依赖前四个包。**
 
 ### 6.2 一条完整调用链（以“总融合·部署态”为例，从测试一路走到通用函数）
 
 ```
-05_total_version/test_compare_all.py                      ← 入口
+total_version/test_compare_all.py                         ← 入口
   │
-  ├─► 05_total_version/transformer_block_int_fused.build_prepared(P)
-  │      ├─► 01_common/quanti_func.build_pq
-  │      │      └─► 01_common/quanti_func.sym_quanti_int8
-  │      ├─► 01_common/quanti_func.dequant_params
-  │      │      └─► 01_common/quanti_func.dequanti_int8
+  ├─► total_version/transformer_block_int_fused.build_prepared(P)
+  │      ├─► common/quanti_func.build_pq
+  │      │      └─► common/quanti_func.sym_quanti_int8
+  │      ├─► common/quanti_func.dequant_params
+  │      │      └─► common/quanti_func.dequanti_int8
   │      └─► numpy.concatenate（拼 Wqkv，只做一次）
   │
-  ├─► 05_total_version/transformer_block_int_fused.quantized_block_prepared(X, prepared)
-  │      ├─► 04_fused_version/self_attention_fused.self_attention_from_wqkv
-  │      │      └─► 01_common/softmax_layernorm.softmax
-  │      ├─► 01_common/softmax_layernorm.layernorm     （残差后归一化，用了两次）
-  │      └─► 01_common/feed_forward.feed_forward
+  ├─► total_version/transformer_block_int_fused.quantized_block_prepared(X, prepared)
+  │      ├─► fused_version/self_attention_fused.self_attention_from_wqkv
+  │      │      └─► common/softmax_layernorm.softmax
+  │      ├─► common/softmax_layernorm.layernorm     （残差后归一化，用了两次）
+  │      └─► common/feed_forward.feed_forward
   │
-  ├─► 01_common/quanti_func.inaccuracy(基准, 结果)        ← 绝对误差 + 相对误差
-  └─► 01_common/quanti_func.storage_bytes(P)            ← int8 存储账
+  ├─► common/quanti_func.inaccuracy(基准, 结果)           ← 绝对误差 + 相对误差
+  └─► common/quanti_func.storage_bytes(P)               ← int8 存储账
 ```
 
 ### 6.3 五种实现各自的调用链（横向对比）
 
-每一行都是“入口函数 → … → 落到通用函数”的完整路径，`01/` 开头的是 01_common 里的函数。
+每一行都是“入口函数 → … → 落到通用函数”的完整路径。
 
 | 实现 | 入口函数 | 调用链 |
 | --- | --- | --- |
-| 无优化版 | `02/transformer_block.transformer_block` | `02.transformer_block` → `02.self_attention` → `01.softmax`；再 → `01.layernorm` → `01.feed_forward` → `01.layernorm` |
-| 单量化版 | `03/transformer_block_int.quantized_transformer_block` | `01.build_pq` → `01.dequant_params` → `03.transformer_block_int` → `02.self_attention` → `01.softmax`；再 → `01.layernorm` → `01.feed_forward` → `01.layernorm` |
-| QKV融合版 | `04/transformer_block_fused.transformer_block_fused` | `04.transformer_block_fused` → `04.self_attention_fused` → `04.self_attention_from_wqkv` → `01.softmax`；再 → `01.layernorm` → `01.feed_forward` → `01.layernorm` |
-| 总融合版 | `05/transformer_block_int_fused.quantized_transformer_block_fused` | `01.build_pq` → `01.dequant_params` → `np.concatenate`（拼 Wqkv）→ `05.…_fused` → `04.self_attention_from_wqkv` → `01.softmax`；再 → `01.layernorm` → `01.feed_forward` → `01.layernorm` |
-| 总融合·部署态 | `05/transformer_block_int_fused.quantized_block_prepared` | `01.build_pq` → `01.dequant_params` → `05.build_prepared`（反量化与拼接只做一次）→ `05.quantized_block_prepared` → `04.self_attention_from_wqkv` → `01.softmax`；再 → `01.layernorm` → `01.feed_forward` → `01.layernorm` |
+| 无优化版 | `float_version/transformer_block.transformer_block` | `float_version.transformer_block` → `float_version.self_attention` → `common.softmax`；再 → `common.layernorm` → `common.feed_forward` → `common.layernorm` |
+| 单量化版 | `quant_version/transformer_block_int.quantized_transformer_block` | `common.build_pq` → `common.dequant_params` → `quant_version.transformer_block_int` → `float_version.self_attention` → `common.softmax`；再 → `common.layernorm` → `common.feed_forward` → `common.layernorm` |
+| QKV融合版 | `fused_version/transformer_block_fused.transformer_block_fused` | `fused_version.transformer_block_fused` → `fused_version.self_attention_fused` → `fused_version.self_attention_from_wqkv` → `common.softmax`；再 → `common.layernorm` → `common.feed_forward` → `common.layernorm` |
+| 总融合版 | `total_version/transformer_block_int_fused.quantized_transformer_block_fused` | `common.build_pq` → `common.dequant_params` → `np.concatenate`（拼 Wqkv）→ `total_version.…_fused` → `fused_version.self_attention_from_wqkv` → `common.softmax`；再 → `common.layernorm` → `common.feed_forward` → `common.layernorm` |
+| 总融合·部署态 | `total_version/transformer_block_int_fused.quantized_block_prepared` | `common.build_pq` → `common.dequant_params` → `total_version.build_prepared`（反量化与拼接只做一次）→ `total_version.quantized_block_prepared` → `fused_version.self_attention_from_wqkv` → `common.softmax`；再 → `common.layernorm` → `common.feed_forward` → `common.layernorm` |
 
 ### 6.4 五个测试脚本各自覆盖的范围
 
-| 脚本 | 所在目录 | 入口函数 | 覆盖范围 |
+| 脚本 | 所在包 | 入口函数 | 覆盖范围 |
 | --- | --- | --- | --- |
-| `main_test.py` | 02_float_version | `transformer_block` | 最小前向：维度、注意力矩阵、行和、H2 |
-| `test_mine.py` | 02_float_version | `self_attention` | 手算例子核对注意力矩阵（2×2 单位权重） |
-| `test_int.py` | 03_quant_version | `transformer_block_int` | 浮点版与单量化版输出并排 + 绝对/相对误差 |
-| `bench_qkv.py` | 04_fused_version | 内部 `separate` / `fused` | QKV 融合单独计时（128×64，预热 + 中位数） |
-| `test_compare_all.py` | 05_total_version | `build_versions` | 五项自动检查 + 五种实现的误差、输出、存储账、计时 |
+| `main_test.py` | float_version | `transformer_block` | 最小前向：维度、注意力矩阵、行和、H2 |
+| `test_mine.py` | float_version | `self_attention` | 手算例子核对注意力矩阵（2×2 单位权重） |
+| `test_int.py` | quant_version | `transformer_block_int` | 浮点版与单量化版输出并排 + 绝对/相对误差 |
+| `bench_qkv.py` | fused_version | 内部 `separate` / `fused` | QKV 融合单独计时（128×64，预热 + 中位数） |
+| `test_compare_all.py` | total_version | `build_versions` | 五项自动检查 + 五种实现的误差、输出、存储账、计时 |
 
 ## 七、成果汇总与汇报分工
 
