@@ -1,10 +1,3 @@
-# -*- coding: utf-8 -*-
-"""方向B 最小对照（成员甲）：浮点版 Block vs 量化版 Block
-
-输出两者结果并排对比，并给出最大绝对误差与相对误差。
-完整的五实现对比（含融合、计时、存储账）见 test_compare_all.py。
-"""
-
 import numpy as np
 
 from params import make_params
@@ -13,7 +6,7 @@ from transformer_block import transformer_block
 from transformer_block_int import quantized_transformer_block
 
 X, P = make_params(np.random.default_rng(0), d_model=4, d_ff=8, T=3)
-Pq = build_pq(P)                       # 量化参数统一由 quanti_func.build_pq 生成
+Pq = build_pq(P)                       
 
 H2 = transformer_block(X, P)
 H2q = quantized_transformer_block(X, Pq)
