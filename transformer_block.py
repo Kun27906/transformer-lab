@@ -1,4 +1,3 @@
-import numpy as np
 from softmax_layernorm import layernorm
 from self_attention import self_attention
 from feed_forward import feed_forward

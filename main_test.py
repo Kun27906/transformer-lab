@@ -1,31 +1,25 @@
+# -*- coding: utf-8 -*-
+"""第二阶段主入口（成员甲）：最小可跑 demo
+
+打印各步骤的张量维度、注意力矩阵与最终输出。
+题目第 3 节的 5 项自动检查、以及误差/存储/计时的完整对比，
+统一放在 test_compare_all.py 里，这里只保留最小演示。
+"""
+
 import numpy as np
-from softmax_layernorm import softmax
-from softmax_layernorm import layernorm
-from feed_forward import feed_forward
+
+from params import make_params
+from self_attention import self_attention
 from transformer_block import transformer_block
 
-rng = np.random.default_rng(0)
+# 输入与权重统一从 params.make_params 取，保证与组内其他实验完全一致
+X, P = make_params(np.random.default_rng(0), d_model=4, d_ff=8, T=3)
 
-d_model, d_ff, T = 4, 8, 3
-X = rng.normal(size=(T, d_model))
-P = dict(
-    Wq=rng.normal(size=(d_model, d_model)),
-    Wk=rng.normal(size=(d_model, d_model)),
-    Wv=rng.normal(size=(d_model, d_model)),
-    Wo=rng.normal(size=(d_model, d_model)),
-    g1=np.ones(d_model), b1=np.zeros(d_model),
-    g2=np.ones(d_model), b2=np.zeros(d_model),
-    W1=rng.normal(size=(d_model, d_ff)), b1f=np.zeros(d_ff),
-    W2=rng.normal(size=(d_ff, d_model)), b2f=np.zeros(d_model),
-)
-
-print('X shape:', X.shape)
-Q, K, V = X @ P['Wq'], X @ P['Wk'], X @ P['Wv']
-print('Q/K/V shape:', Q.shape)
-S = Q @ K.T / np.sqrt(d_model)
-A = softmax(S)
+print('X shape:', X.shape)                                  # (3, 4)
+attn_out, A = self_attention(X, P['Wq'], P['Wk'], P['Wv'], P['Wo'])
+print('Q/K/V shape:', attn_out.shape)                       # 注意力输出与输入同形
 print('attention matrix A:\n', np.round(A, 4))
 print('each row sums to 1:', A.sum(axis=1))
-H = transformer_block(X, P)
-print('final output H2:\n', np.round(H, 4))
 
+H2 = transformer_block(X, P)
+print('final output H2:\n', np.round(H2, 4))
