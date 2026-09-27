@@ -1,3 +1,10 @@
+import os
+import sys
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+for _d in ("01_common", "02_float_version", "03_quant_version", "04_fused_version", "05_total_version"):
+    sys.path.append(os.path.join(ROOT, _d))
+
 import numpy as np
 
 from params import make_params
